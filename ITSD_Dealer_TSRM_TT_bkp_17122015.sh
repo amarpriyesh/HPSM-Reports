@@ -1,0 +1,99 @@
+cd
+. ./.bash_profile
+cd /hpsm/hpsm/ops/reports/
+datestr=`date "+%d%m%y%H%M"`
+
+sqlplus -S -R 1 HPSM94BKPADMIN/HPSM94BKPADMIN#123@sm9prod << EOF
+set colsep ,
+set pagesize 0
+set trimspool on
+set headsep off
+set linesize 20000
+set feedback off
+set echo off
+spool ITSD_Dealer_TSRM_TT$datestr.txt
+-------------------ITSD Incident extract------------------------------------
+set ESCAPE '\'
+select 
+'IncidentNo'
+||'|'||'Related SD'
+||'|'||'IsDealer'
+||'|'||'IncidentStatus'
+||'|'||'Opened By'
+||'|'||'Assignee Name'
+||'|'||'IncidentCategory'
+||'|'||'IncidentArea'
+||'|'||'IncidentSubArea'
+||'|'||'Priority'
+||'|'||'CurrentResolverGroup'
+||'|'||'AssigneeName'
+||'|'||'OpenTime'
+||'|'||'ResolvedTime'
+||'|'||'ClosedTime'
+||'|'||'UpdatedTime'
+||'|'||'TT Type'
+||'|'||'Pending Reason'
+||'|'||'PendingWithVendor'
+||'|'||'PendingWithCustomer'
+||'|'||'PendingWithThirdParty'
+||'|'||'Pending for Others'
+||'|'||'Engaged with other task'
+||'|'||'Pending for Transport'
+||'|'||'Pending for Site Visit'
+||'|'||'Pending for Hardware'
+||'|'||'Pending for CR Implementation'
+||'|'||'Pending for Testing'
+||'|'||'Pending with Development/Planning'
+||'|'||'Pending for Site Access'
+||'|'||'BriefDescription'
+||'|'||'Final Resolution'
+||'|'||'Update Action'
+from Dual
+UNION ALL
+select
+"NUMBER"
+||'|'||incident_id
+||'|'||is_dealer
+||'|'||problem_status
+||'|'||opened_by
+||'|'||assignee_name
+||'|'||category
+||'|'||subcategory
+||'|'||product_type
+||'|'||priority_code
+||'|'||assignment
+||'|'||assignee_name
+||'|'||to_char(open_time+4/24,'mm-dd-yyyy HH24:MI:SS')
+||'|'||to_char(resolved_time+4/24,'mm-dd-yyyy HH24:MI:SS')
+||'|'||to_char(close_time+4/24,'mm-dd-yyyy HH24:MI:SS') 
+||'|'||to_char(update_time+4/24,'mm/dd/yyyy HH24:MI:SS')
+||'|'||du_tt_type
+||'|'||pending_code
+||'|'||(select (extract(day from total)-1)||' '||to_char (total,'HH24:MI:SS') from clocksm1 where name = 'Pending Vendor' and KEY_CHAR = "NUMBER")
+||'|'||(select (extract(day from total)-1)||' '||to_char (total,'HH24:MI:SS') from clocksm1 where name = 'Pending Customer' and KEY_CHAR = "NUMBER")
+||'|'||(select (extract(day from total)-1)||' '||to_char (total,'HH24:MI:SS') from clocksm1 where name = 'Pending Third Party' and KEY_CHAR = "NUMBER")
+||'|'||(select (extract(day from total)-1)||' '||to_char (total,'HH24:MI:SS') from clocksm1 where name = 'Pending for Others' and KEY_CHAR = "NUMBER")
+||'|'||(select (extract(day from total)-1)||' '||to_char (total,'HH24:MI:SS') from clocksm1 where name = 'Engaged with other task' and KEY_CHAR = "NUMBER")
+||'|'||(select (extract(day from total)-1)||' '||to_char (total,'HH24:MI:SS') from clocksm1 where name = 'Pending for Transport' and KEY_CHAR = "NUMBER")
+||'|'||(select (extract(day from total)-1)||' '||to_char (total,'HH24:MI:SS') from clocksm1 where name = 'Pending for Site Visit' and KEY_CHAR = "NUMBER")
+||'|'||(select (extract(day from total)-1)||' '||to_char (total,'HH24:MI:SS') from clocksm1 where name = 'Pending for Hardware' and KEY_CHAR = "NUMBER")
+||'|'||(select (extract(day from total)-1)||' '||to_char (total,'HH24:MI:SS') from clocksm1 where name = 'Pending for CR Implementation' and KEY_CHAR = "NUMBER")
+||'|'||(select (extract(day from total)-1)||' '||to_char (total,'HH24:MI:SS') from clocksm1 where name = 'Pending for Testing' and KEY_CHAR = "NUMBER")
+||'|'||(select (extract(day from total)-1)||' '||to_char (total,'HH24:MI:SS') from clocksm1 where name = 'Pending with Development/Planning' and KEY_CHAR = "NUMBER")
+||'|'||(select (extract(day from total)-1)||' '||to_char (total,'HH24:MI:SS') from clocksm1 where name = 'Pending for Site Access' and KEY_CHAR = "NUMBER")
+||'|'||REPLACE(REPLACE(REPLACE(DBMS_LOB.SUBSTR(brief_description, 2000,1), CHR(10), ' '), CHR(13), ' '), CHR(9), ' ')
+||'|'||REPLACE(REPLACE(REPLACE(DBMS_LOB.SUBSTR(resolution, 2000,1), CHR(10), ' '), CHR(13), ' '), CHR(9), ' ')
+||'|'||trim(replace(replace(replace(DBMS_LOB.SUBSTR(update_action, 400,1),chr(10)),chr(13)),','))
+from probsummarym1 
+where (close_time+4/24 >=to_date('01/10/2015 00:00:00','dd/mm/yyyy hh24:mi:ss') and close_time+4/24 <to_date('01/12/2015 00:00:00','dd/mm/yyyy hh24:mi:ss')) 
+and
+assignment in ('IT - Backup Admin','IT - Corporate Technical Support','IT - Database Admin','IT - Desktop \& System Support','IT - Enterprise Systems (HMC)','IT - Retail Technical Support','IT - SAN Admin','IT - System Admin UNIX','IT - System Admin WINDOWS');
+
+spool off;
+quit;
+EOF
+/usr/bin/smbclient \\\\172.21.15.11\\HPSMFilesShareFolder -A .passwd_new.txt -c "lcd /hpsm/hpsm/ops/reports/ ; prompt; recurse; mput ITSD_Dealer_TSRM_TT$datestr.txt; exit;"
+gzip ITSD_Dealer_TSRM_TT$datestr.txt
+##(echo "Please find attached TT report"; uuencode  ITSD_Dealer_TSRM_TT$datestr.txt.gz ITSD_Dealer_TSRM_TT$datestr.txt.gz)| mailx -s " TT Report for `date`" "nihalchand.dehury@du.ae,mohammed.rezwanali@du.ae,Edward.Paul@du.ae,Iqbal.Khan@du.ae,Mansoor.A@du.ae,Midhun.Antony@du.ae,Praveen.Singu@du.ae,Sankar.Kotla@du.ae,Winner.Viagularaj@du.ae,ServiceDesk@du.ae" 
+echo "."| mail -v -s "Please find attached ITSD Dealer TT report" -a /hpsm/hpsm/ops/reports/ITSD_Dealer_TSRM_TT$datestr.txt.gz nihalchand.dehury@du.ae,mohammed.rezwanali@du.ae,Edward.Paul@du.ae,Iqbal.Khan@du.ae,Mansoor.A@du.ae,Midhun.Antony@du.ae,Praveen.Singu@du.ae,Sankar.Kotla@du.ae,Winner.Viagularaj@du.ae,ServiceDesk@du.ae
+/usr/bin/smbclient \\\\10.175.67.50\\Public\$ -A .passwd.txt -c "cd \"ITSD HPSM Reports\Siebel HPSM Reports\"; lcd /hpsm/hpsm/ops/reports/; prompt; recurse; mput ITSD_Dealer_TSRM_TT$datestr.txt.gz; exit;"
